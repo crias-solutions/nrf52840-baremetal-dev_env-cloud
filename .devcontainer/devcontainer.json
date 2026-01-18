@@ -1,5 +1,5 @@
 {
-    "name": "nRF52840 Bare-Metal Cloud Development",
+    "name": "nRF52840 Bare-Metal Cloud Development with Claude Agent",
     "build": {
         "dockerfile": "Dockerfile",
         "context": ".."
@@ -28,13 +28,18 @@
                 ],
                 "C_Cpp.default.defines": [
                     "NRF52840_XXAA"
-                ]
+                ],
+                "terminal.integrated.env.linux": {
+                    "NRF5_SDK_PATH": "/opt/nrf5_sdk",
+                    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+                }
             }
         }
     },
 
     "remoteUser": "vscode",
-    "postCreateCommand": "arm-none-eabi-gcc --version && echo $NRF5_SDK_PATH && nrfjprog --version",
+    
+    "postCreateCommand": "arm-none-eabi-gcc --version && echo $NRF5_SDK_PATH && nrfjprog --version && claude --version",
     
     "features": {
         "ghcr.io/devcontainers/features/git:1": {}
