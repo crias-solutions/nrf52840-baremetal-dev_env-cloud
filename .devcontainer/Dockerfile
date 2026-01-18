@@ -78,6 +78,21 @@ RUN pip3 install --no-cache-dir \
     click \
     colorama
 
+# ========== NODE.JS (Required for Claude Code CLI) ==========
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js installation
+RUN node --version && npm --version
+
+# ========== CLAUDE CODE CLI ==========
+# Install Claude Code globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Create Claude configuration directory
+RUN mkdir -p /home/vscode/.claude/commands
+
 # ========== WORKSPACE SETUP ==========
 WORKDIR /workspaces/project
 
