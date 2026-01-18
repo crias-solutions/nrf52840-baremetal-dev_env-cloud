@@ -60,11 +60,17 @@ RUN wget -q https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-
     && dpkg -i nrf-command-line-tools_10.24.2_amd64.deb || apt-get install -f -y \
     && rm nrf-command-line-tools_10.24.2_amd64.deb
 
-# ========== SEGGER J-LINK ==========
-# Install J-Link software (for debugging)
-RUN wget -q --post-data "accept_license_agreement=accepted" -O JLink.deb https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.deb \
-    && dpkg -i JLink.deb || apt-get install -f -y \
-    && rm JLink.deb
+# ========== SEGGER J-LINK (TGZ Method for Containers) ==========
+RUN mkdir -p /opt/SEGGER \
+    && wget -q --post-data "accept_license_agreement=accepted" -O /tmp/JLink.tgz https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.tgz \
+    && tar -xzf /tmp/JLink.tgz -C /opt/SEGGER/ \
+    && rm /tmp/JLink.tgz \
+    && JLINK_DIR=$(ls /opt/SEGGER | grep JLink) \
+    && ln -s /opt/SEGGER/$JLINK_DIR /opt/SEGGER/JLink
+
+# Add J-Link to PATH and Library Path
+ENV PATH="/opt/SEGGER/JLink:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/SEGGER/JLink:${LD_LIBRARY_PATH}"
 
 # ========== PYTHON DEPENDENCIES ==========
 RUN pip3 install --no-cache-dir \
