@@ -40,15 +40,16 @@ ENV PATH="/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin:${PATH}"
 RUN mkdir -p /opt/nrf5_sdk
 WORKDIR /opt/nrf5_sdk
 
-# Download nRF5 SDK (bare metal, NOT nRF Connect SDK)
+# Download and flatten the SDK structure
 RUN wget -q https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/sdks/nrf5/binaries/nrf5_sdk_17.1.0_ddde560.zip \
     && unzip -q nrf5_sdk_17.1.0_ddde560.zip \
-    && rm nrf5_sdk_17.1.0_ddde560.zip
+    && mv nRF5_SDK_17.1.0_ddde560/* . \
+    && rm -rf nRF5_SDK_17.1.0_ddde560 nrf5_sdk_17.1.0_ddde560.zip
 
 # Set SDK environment variable
 ENV NRF5_SDK_PATH=/opt/nrf5_sdk
 
-# Configure SDK to use our ARM GCC toolchain
+# Configure SDK to use our ARM GCC toolchain (now the path exists!)
 RUN echo "GNU_INSTALL_ROOT := /opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/" > /opt/nrf5_sdk/components/toolchain/gcc/Makefile.posix \
     && echo "GNU_VERSION := 12.2.1" >> /opt/nrf5_sdk/components/toolchain/gcc/Makefile.posix \
     && echo "GNU_PREFIX := arm-none-eabi" >> /opt/nrf5_sdk/components/toolchain/gcc/Makefile.posix
