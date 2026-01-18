@@ -1,1 +1,51 @@
+{
+    "name": "nRF52840 Bare-Metal Cloud Development",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    
+    "runArgs": ,[
+        "--privileged"
+    ],
+    
+    "customizations": {
+        "vscode": {
+            "extensions": ,[
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "continue.continue",
+                "ms-python.python",
+                "marus25.cortex-debug"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "C_Cpp.default.compilerPath": "/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc",
+                "C_Cpp.default.includePath": ,[
+                    "${workspaceFolder}/**",
+                    "/opt/nrf5_sdk/components/**",
+                    "/opt/nrf5_sdk/modules/**"
+                ],
+                "C_Cpp.default.defines": ,[
+                    "NRF52840_XXAA"
+                ]
+            }
+        }
+    },
 
+    "remoteUser": "vscode",
+    
+    "postCreateCommand": "arm-none-eabi-gcc --version && echo $NRF5_SDK_PATH && nrfjprog --version",
+    
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {}
+    },
+
+    "mounts": ,[
+        "source=${localWorkspaceFolder},target=/workspaces/project,type=bind,consistency=cached"
+    ],
+
+    "workspaceFolder": "/workspaces/project",
+    
+    "forwardPorts": ,[3240]
+}
