@@ -40,10 +40,5 @@
         "ghcr.io/devcontainers/features/git:1": {}
     },
 
-    "mounts": [
-        "source=${localWorkspaceFolder},target=/workspaces/project,type=bind,consistency=cached"
-    ],
-
-    "workspaceFolder": "/workspaces/project",
     "forwardPorts": [3240]
 }
