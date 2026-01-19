@@ -1,0 +1,30 @@
+# Ensure consistent line endings (LF) across all platforms
+* text=auto eol=lf
+
+# Mark shell scripts as executable
+*.sh text eol=lf
+scripts/*.sh text eol=lf
+
+# Mark Python scripts as executable
+*.py text eol=lf
+scripts/*.py text eol=lf
+
+# Binary files
+*.hex binary
+*.bin binary
+*.elf binary
+*.o binary
+
+# Documentation
+*.md text
+*.txt text
+
+# Source code
+*.c text
+*.h text
+*.cpp text
+*.hpp text
+
+# Makefiles
+Makefile text
+*.mk text
