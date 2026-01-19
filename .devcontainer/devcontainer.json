@@ -29,17 +29,22 @@
                 "C_Cpp.default.defines": [
                     "NRF52840_XXAA"
                 ],
-                "terminal.integrated.env.linux": {
-                    "NRF5_SDK_PATH": "/opt/nrf5_sdk",
-                    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
-                }
+                "files.associations": {
+                    "*.md": "markdown"
+                },
+                "markdown.preview.breaks": true
             }
         }
     },
 
+    "containerEnv": {
+        "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+        "NRF5_SDK_PATH": "/opt/nrf5_sdk"
+    },
+
     "remoteUser": "vscode",
     
-    "postCreateCommand": "arm-none-eabi-gcc --version && echo $NRF5_SDK_PATH && nrfjprog --version && claude --version",
+    "postCreateCommand": "bash -c 'mkdir -p docs/FSD projects && chmod +x scripts/*.sh scripts/*.py && bash scripts/setup_git.sh && arm-none-eabi-gcc --version && nrfjprog --version && claude --version && echo && echo \"✅ Environment ready! Type \\\"claude\\\" to start.\"'",
     
     "features": {
         "ghcr.io/devcontainers/features/git:1": {}
