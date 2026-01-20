@@ -90,8 +90,8 @@ RUN node --version && npm --version
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Create Claude configuration directory
-RUN mkdir -p /home/vscode/.claude/commands
+# Create Claude configuration directory and set correct ownership
+RUN mkdir -p /home/vscode/.claude/commands && chown -R vscode:vscode /home/vscode/.claude
 
 # ========== WORKSPACE SETUP ==========
 WORKDIR /workspaces/project
