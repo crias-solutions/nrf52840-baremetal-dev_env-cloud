@@ -47,6 +47,9 @@
     "postCreateCommand": "bash -c 'mkdir -p docs/FSD projects && chmod +x scripts/*.sh scripts/*.py && bash scripts/setup_git.sh && arm-none-eabi-gcc --version && nrfjprog --version && claude --version && echo && echo \"✅ Environment ready! Type \\\"claude\\\" to start.\"'",
     
     "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+        "version": "latest"
+        },
         "ghcr.io/devcontainers/features/git:1": {}
     },
 
