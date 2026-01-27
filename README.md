@@ -415,145 +415,554 @@ Create a new FSD for a UART logger that prints "Hello World" every second. Save 
 
 ---
 
-## 7. Hardware Connection: USB/IP (How-To)
+## 7. Hardware Connection: USB/IP Tunneling (How-To)
 
-**Note:** This section is for when you have your physical nRF52840 DK. You can develop and test without hardware using mock scripts.
+**⚠️ IMPORTANT LIMITATION DISCOVERED:** GitHub Codespaces runs on an Azure-optimized kernel that **does not include the `vhci-hcd` kernel module** required for USB/IP client functionality. This means **direct USB device attachment in the browser-based Codespace is not possible**.
 
-### Overview
+**SOLUTION:** Use the **Hybrid Workflow** (Section 7.6) where you build in the cloud and flash locally from Windows.
 
-USB/IP creates a network tunnel that makes your cloud environment "see" the USB device as if it were plugged in locally.
+This section documents the complete setup process, workarounds discovered, and the architectural limitation encountered.
 
-### Architecture
+---
+
+### 7.1 Architecture Overview
 
 ```
-Your Computer (USB/IP Server)
-    ↓ USB Cable
-nRF52840 DK
-    ↓ USB/IP Export
-SSH Tunnel (Port 3240)
-    ↓ Reverse Tunnel
-GitHub Codespace (USB/IP Client)
-    ↓ nrfjprog
-Firmware Flashed!
+Physical nRF52840 DK
+    ↓ (USB cable)
+Windows PC (Host: 172.28.112.1)
+    ↓ (usbipd service on port 3240)
+WSL (Bridge)
+    ↓ (gh codespace ssh tunnel: -R 3240:172.28.112.1:3240)
+GitHub Codespace (Cloud)
+    ↓ (sudo usbip attach - BLOCKED by missing vhci-hcd module)
+❌ Hardware attachment fails
 ```
 
-### Setup (Windows with WSL2)
+---
 
-**On Your Local Computer:**
+### 7.2 Prerequisites
 
-1. **Install WSL2:**
-   ```powershell
-   # In PowerShell (Administrator)
-   wsl --install
-   # Restart computer
-   ```
+**Software Requirements:**
 
-2. **Install usbipd-win:**
-   - Download from [GitHub Releases](https://github.com/dorssel/usbipd-win/releases)
-   - Install the `.msi` file
-   - Restart PowerShell
+| Component | Installation Method | Purpose |
+|-----------|---------------------|---------|
+| usbipd-win | [Download](https://github.com/dorssel/usbipd-win/releases) | Windows USB/IP server |
+| GitHub CLI (`gh`) | `sudo apt install gh` (in WSL) | Authenticated SSH tunneling |
+| nRF Command Line Tools | [Download](https://www.nordicsemi.com/Products/Development-tools/nrf-command-line-tools/download) | Local flashing (Hybrid Workflow) |
 
-3. **Connect nRF52840 DK:**
-   - Plug USB cable into "nRF USB" port (NOT "External Power")
-   - Flip power switch to ON
-   - Green LED (LD1) should light up
+**Hardware Requirements:**
+- nRF52840 Development Kit
+- USB cable (data-capable, not charge-only)
+- Windows 10/11 with WSL2
 
-4. **List USB Devices:**
-   ```powershell
-   usbipd list
-   ```
-   **Expected:** You see "SEGGER J-Link" with a BUSID (e.g., `1-4`)
+---
 
-5. **Bind and Share:**
-   ```powershell
-   usbipd bind --busid 1-4
-   usbipd attach --wsl --busid 1-4
-   ```
+### 7.3 Step-by-Step Setup (What We Attempted)
 
-6. **Verify in WSL2:**
-   ```bash
-   # In WSL2 terminal
-   lsusb
-   ```
-   **Expected:** You see "SEGGER J-Link"
+#### **STEP 1: Windows Setup (PowerShell as Administrator)**
 
-**In Your Codespace:**
+**Open PowerShell as Administrator:**
+1. Press `Windows Key`
+2. Type `PowerShell`
+3. Right-click "Windows PowerShell"
+4. Select "Run as Administrator"
 
-1. **Create SSH Tunnel:**
-   ```bash
-   # In a separate terminal on your local machine
-   ssh -R 3240:localhost:3240 vscode@<your-codespace-name>.github.dev
-   ```
-   **Keep this terminal open!**
+**Commands:**
 
-2. **Attach USB Device:**
-   ```bash
-   # In Codespace terminal
-   sudo usbip attach -r localhost -b 1-1.2
-   ```
+```powershell
+# 1. List connected USB devices
+usbipd list
 
-3. **Verify Connection:**
-   ```bash
-   lsusb
-   # Expected: Shows "SEGGER J-Link"
+# Expected output:
+# BUSID  VID:PID    DEVICE                                            STATE
+# 3-1    1366:1061  JLink CDC UART Port (COM6), JLink CDC UART...    Not shared
 
-   nrfjprog --ids
-   # Expected: Shows your board's serial number (1050XXXXXX)
-   ```
+# 2. Bind the device (makes it shareable)
+usbipd bind --busid 3-1
 
-**✅ Success Check:** `nrfjprog --ids` returns a 10-digit serial number.
+# 3. Verify the service is running
+Get-Service -Name usbipd
 
-### Setup (Linux)
+# Expected output:
+# Status   Name               DisplayName
+# ------   ----               -----------
+# Running  usbipd             USBIP Device Host
 
-**On Your Local Computer:**
+# 4. Verify device is now "Shared"
+usbipd list
 
-1. **Install USB/IP:**
-   ```bash
-   sudo apt update
-   sudo apt install linux-tools-generic hwdata usbip
-   sudo modprobe usbip-core
-   sudo modprobe usbip-host
-   ```
+# Expected output:
+# BUSID  VID:PID    DEVICE                                            STATE
+# 3-1    1366:1061  JLink CDC UART Port (COM6), JLink CDC UART...    Shared
 
-2. **Connect and Bind:**
-   ```bash
-   # List devices
-   lsusb
-   usbip list -l
+# 5. Check that port 3240 is listening
+netstat -ano | findstr "3240"
 
-   # Bind the J-Link (replace 1-1.2 with your bus ID)
-   sudo usbip bind -b 1-1.2
+# Expected output:
+# TCP    0.0.0.0:3240           0.0.0.0:0              LISTENING       196908
+# TCP    [::]:3240              [::]:0                 LISTENING       196908
+```
 
-   # Start daemon
-   sudo usbipd -D
-   ```
+**✅ Success Indicators:**
+- Device shows "Shared" state
+- Port 3240 is listening on both IPv4 and IPv6
+- usbipd service status is "Running"
 
-3. **Set Permissions:**
-   ```bash
-   sudo cp /opt/SEGGER/JLink/99-jlink.rules /etc/udev/rules.d/
-   sudo udevadm control --reload-rules
-   sudo usermod -a -G dialout $USER
-   ```
-   **Log out and back in.**
+**⚠️ Common Issues:**
 
-**In Your Codespace:** (Same as Windows steps above)
+| Issue | Solution |
+|-------|----------|
+| "usbipd: command not found" | Install usbipd-win from GitHub releases |
+| Device shows "Not shared" | Run `usbipd bind --busid 3-1` |
+| Service not running | Run `Start-Service usbipd` |
+| USBPcap warning | Cosmetic only, can be ignored |
 
-### Flashing Firmware
+---
 
-Once USB/IP is connected:
+#### **STEP 2: WSL Setup (The Bridge)**
+
+**Open WSL Terminal:**
+- Press `Windows Key`
+- Type `WSL` or `Ubuntu`
+- Press Enter
+
+**Part A: Enable WSL Interoperability**
 
 ```bash
-cd projects/my_blinky
-make flash
+# 1. Edit WSL configuration
+sudo nano /etc/wsl.conf
 
-# Or manually:
-nrfjprog --program build/blinky.hex --chiperase --verify --reset
+# 2. Add or verify these lines exist:
+[interop]
+enabled=true
+appendWindowsPath=true
+
+# 3. Save and exit (Ctrl+O, Enter, Ctrl+X)
+```
+
+**Restart WSL (in PowerShell):**
+```powershell
+wsl --shutdown
+```
+
+**Re-open WSL terminal.**
+
+---
+
+**Part B: Install and Configure GitHub CLI**
+
+```bash
+# 1. Install GitHub CLI
+sudo apt update
+sudo apt install gh
+
+# 2. Authenticate with GitHub
+gh auth login
+
+# Follow prompts:
+# - What account? → GitHub.com
+# - Protocol? → HTTPS
+# - Authenticate Git? → Yes
+# - How to authenticate? → Login with a web browser
+# - Copy the one-time code and paste in browser
+
+# 3. Grant Codespace permissions (CRITICAL STEP)
+gh auth refresh -h github.com -s codespace
+
+# Follow browser authentication again
+# This grants the "codespace" scope needed to manage Codespaces
+
+# 4. Verify authentication
+gh auth status
+```
+
+**Expected Output:**
+```
+✓ Logged in to github.com as YOUR_USERNAME
+✓ Git operations for github.com configured to use https protocol.
+✓ Token: *******************
+✓ Token scopes: codespace, gist, read:org, repo, workflow
+```
+
+**✅ Success Check:** Token scopes include `codespace`
+
+---
+
+**Part C: Get Your Codespace Name**
+
+```bash
+# List your Codespaces
+gh codespace list
+
+# Expected output:
+# NAME                              DISPLAY NAME                    REPOSITORY                           ...
+# <your-codespace-name>  nrf52840-baremetal-dev_env-cloud  your-username/nrf52840-baremetal...
+
+# Copy the NAME (first column) - you'll need it for the tunnel
+```
+
+---
+
+**Part D: Identify Windows Host IP**
+
+**IMPORTANT:** When you attach a device to WSL, `usbipd` tells you the Windows host IP. We need this for the tunnel.
+
+```bash
+# In WSL, temporarily attach device to see the IP
+# (We'll detach it immediately after)
+```
+
+**In PowerShell (Administrator):**
+```powershell
+usbipd attach --wsl --busid 3-1
+```
+
+**Expected Output:**
+```
+usbipd: info: Using WSL distribution 'Ubuntu' to attach; the device will be available in all WSL 2 distributions.
+usbipd: info: Detected networking mode 'nat'.
+usbipd: info: Using IP address <localhost> to reach the host.
+```
+
+**📝 Note the IP address:** `<localhost>` (yours may differ)
+
+**Detach the device:**
+```powershell
+usbipd detach --busid 3-1
+```
+
+**Verify it's back to "Shared":**
+```powershell
+usbipd list
+```
+
+---
+
+**Part E: Install USB Tools in WSL (Optional Verification)**
+
+```bash
+# Install USB utilities
+sudo apt install usbutils
+
+# Verify lsusb works
+lsusb
+
+# Expected output (when device is attached to WSL):
+# Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+# Bus 001 Device 002: ID 1366:1061 SEGGER J-Link
+# Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+```
+
+---
+
+**Part F: Create the SSH Tunnel**
+
+**CRITICAL:** Use the Windows host IP you noted earlier (e.g., `172.28.112.1`), NOT `localhost`.
+
+```bash
+# Create reverse tunnel from Codespace to Windows
+# Replace <YOUR_CODESPACE_NAME> with the name from Step C
+# Replace 172.28.112.1 with YOUR Windows host IP
+
+gh codespace ssh --codespace <YOUR_CODESPACE_NAME> -- -R 3240:<localhost>:3240
+
+# Example:
+gh codespace ssh --codespace potential-pancake-r4wp5jgx9wqx2wwj9 -- -R 3240:172.28.112.1:3240
+```
+
+**Expected Output:**
+```
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 6.8.0-1030-azure x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+
+To restore this content, you can run the 'unminimize' command.
+
+@crias-solutions ➜ /workspaces/nrf52840-baremetal-dev_env-cloud (main) $
+```
+
+**✅ Success Check:** 
+- You get a Codespace shell prompt
+- **NO** error message like "connect_to localhost port 3240: failed"
+
+**🔴 CRITICAL:** **Keep this WSL terminal window open!** Closing it terminates the tunnel.
+
+---
+
+#### **STEP 3: Codespace Setup (The Cloud)**
+
+**Open a NEW terminal in your Codespace** (browser or VS Code - don't use the tunnel terminal).
+
+**Part A: Install Azure Kernel-Specific USB/IP Tools**
+
+```bash
+# Update package list
+sudo apt update
+
+# Install kernel-specific tools for Azure
+sudo apt install -y linux-tools-6.8.0-1030-azure linux-cloud-tools-6.8.0-1030-azure
+
+# Verify usbip client is available
+usbip version
+```
+
+**Expected Output:**
+```
+usbip (usbip-utils 2.0)
+```
+
+**✅ Success Check:** `usbip version` returns a version number.
+
+---
+
+**Part B: Verify the Tunnel is Active**
+
+```bash
+# Check if port 3240 is listening in the Codespace
+netstat -tulpen | grep 3240
+```
+
+**Expected Output:**
+```
+tcp        0      0 127.0.0.1:3240          0.0.0.0:*               LISTEN      1000       698628     -
+tcp6       0      0 ::1:3240                :::*                    LISTEN      1000       698627     -
+```
+
+**✅ Success Check:** Port 3240 is listening on both IPv4 and IPv6.
+
+---
+
+**Part C: List Available USB Devices**
+
+```bash
+# Query the Windows host through the tunnel
+sudo usbip list -r localhost
+```
+
+**Expected Output (SUCCESS):**
+```
+Exportable USB devices
+======================
+ - localhost
+        3-1: SEGGER : unknown product (1366:1061)
+           : USB\VID_1366&PID_1061\001050263976
+           : Miscellaneous Device / ? / Interface Association (ef/02/01)
+           :  0 - Communications / Abstract (modem) / AT-commands (v.25ter) (02/02/01)
+           :  1 - CDC Data / Unused / unknown protocol (0a/00/00)
+           :  2 - Communications / Abstract (modem) / AT-commands (v.25ter) (02/02/01)
+           :  3 - CDC Data / Unused / unknown protocol (0a/00/00)
+           :  4 - Vendor Specific Class / Vendor Specific Subclass / Vendor Specific Protocol (ff/ff/ff)
+           :  5 - Mass Storage / SCSI / Bulk-Only (08/06/50)
+```
+
+**✅ Success Check:** You see your J-Link device with all 6 interfaces listed!
+
+**This confirms:**
+- ✅ Windows usbipd server is running
+- ✅ SSH tunnel is working
+- ✅ Protocol handshake succeeded
+- ✅ Device is discoverable from the cloud
+
+---
+
+**Part D: Attempt to Attach the Device (WHERE IT FAILS)**
+
+```bash
+# Try to attach the device
+sudo usbip attach -r localhost -b 3-1
+```
+
+**❌ ACTUAL OUTPUT (FAILURE):**
+```
+libusbip: error: udev_device_new_from_subsystem_sysname failed
+usbip: error: open vhci_driver (is vhci_hcd loaded?)
+```
+
+**This error means:** The `vhci-hcd` kernel module is not available.
+
+---
+
+**Part E: Attempt to Load the Kernel Module (FAILS)**
+
+```bash
+# Try to load the vhci-hcd module
+sudo modprobe vhci-hcd
+```
+
+**❌ ACTUAL OUTPUT:**
+```
+modprobe: FATAL: Module vhci-hcd not found in directory /lib/modules/6.8.0-1030-azure
+```
+
+---
+
+**Part F: Verify Module Availability (CONFIRMS LIMITATION)**
+
+```bash
+# Check if the module directory exists
+ls /lib/modules/$(uname -r)
+
+# Search for vhci modules
+find /lib/modules/$(uname -r) -name "*vhci*"
+
+# Install extra modules package (last attempt)
+sudo apt-get install -y linux-modules-extra-$(uname -r)
+```
+
+**RESULT:** Even after installing `linux-modules-extra-6.8.0-1030-azure` (62.7 MB), the `vhci-hcd` module is **still not present**.
+
+**Expected Output:**
+```
+# After installation
+sudo modprobe vhci-hcd
+modprobe: FATAL: Module vhci-hcd not found in directory /lib/modules/6.8.0-1030-azure
+
+# Module search returns nothing
+find /lib/modules/6.8.0-1030-azure -name "*vhci*"
+(no output)
+```
+
+---
+
+### 7.4 Root Cause Analysis
+
+**THE LIMITATION:** The Azure-optimized Linux kernel used by GitHub Codespaces has USB/IP **client support disabled at compile time**. The `vhci-hcd` (Virtual Host Controller Interface) module is **not compiled** into the kernel.
+
+**Why This Happens:**
+- GitHub Codespaces runs on Azure VMs with a **stripped-down kernel** optimized for cloud workloads
+- USB/IP client functionality is considered a **security risk** in multi-tenant cloud environments
+- The kernel is **read-only** and cannot be modified by users
+- This is an **architectural decision** by Microsoft/GitHub, not a bug
+
+**What Works:**
+- ✅ USB/IP **server** functionality (Windows usbipd)
+- ✅ SSH reverse tunneling (WSL → Codespace)
+- ✅ USB/IP **protocol handshake** (`usbip list` succeeds)
+- ✅ Device **discovery** from the cloud
+
+**What Doesn't Work:**
+- ❌ USB/IP **client** functionality (attaching remote devices)
+- ❌ Loading the `vhci-hcd` kernel module
+- ❌ Direct hardware access from browser-based Codespace
+
+---
+
+### 7.5 Permanent Configuration Updates (For Future Reference)
+
+Despite the limitation, we made these improvements to the environment:
+
+#### **Updated `.devcontainer/Dockerfile`**
+
+**Changed:**
+```dockerfile
+# OLD (doesn't work with Azure kernel)
+RUN apt-get install -y linux-tools-generic
+
+# NEW (matches Azure kernel)
+RUN apt-get install -y linux-tools-azure linux-cloud-tools-azure
+```
+
+**Why:** The `linux-tools-azure` meta-package automatically installs the correct kernel-specific tools for Azure VMs.
+
+---
+
+#### **Updated `.devcontainer/devcontainer.json`**
+
+**Added:**
+```json
+"features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+        "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
+}
+```
+
+**Why:** The `sshd` feature installs an SSH daemon in the container, which is required for `gh codespace ssh` to work.
+
+---
+
+### 7.6 The Hybrid Workflow (RECOMMENDED SOLUTION)
+
+Since direct USB attachment in Codespaces is not possible, use this **industry-standard workflow**:
+
+```
+┌─────────────────────────────────────────────────┐
+│  CLOUD (GitHub Codespace)                       │
+│  ✅ Write code in VS Code                       │
+│  ✅ Build with: make                            │
+│  ✅ Ask Claude for help                         │
+│  ✅ Version control with Git                    │
+│  ✅ Collaborate with team                       │
+└─────────────────┬───────────────────────────────┘
+                  │
+                  ▼ Download .hex file
+┌─────────────────────────────────────────────────┐
+│  LOCAL (Windows PowerShell)                     │
+│  ✅ Flash with: nrfjprog --program blinky.hex   │
+│  ✅ Debug with: JLinkExe                        │
+│  ✅ Monitor serial: nRF Connect                 │
+│  ✅ Power profiling: PPK2                       │
+└─────────────────────────────────────────────────┘
+```
+
+#### **Step-by-Step Hybrid Workflow:**
+
+**1. Build in the Cloud (Codespace):**
+
+```bash
+cd /workspaces/nrf52840-baremetal-dev_env-cloud/my_blinky
+make clean && make
+```
+
+**Expected Output:**
+```
+Build complete!
+   text    data     bss     dec     hex filename
+   2048      56      78    2182     886 build/blinky.elf
+```
+
+---
+
+**2. Download the Firmware:**
+
+**In VS Code (browser or desktop):**
+1. Navigate to `my_blinky/build/blinky.hex` in the Explorer
+2. Right-click → **Download**
+3. Save to your Windows **Downloads** folder
+
+---
+
+**3. Flash Locally (Windows PowerShell):**
+
+**Prerequisites:** Install [nRF Command Line Tools](https://www.nordicsemi.com/Products/Development-tools/nrf-command-line-tools/download) on Windows.
+
+```powershell
+# Navigate to Downloads
+cd $env:USERPROFILE\Downloads
+
+# Verify device connection
+nrfjprog --ids
+
+# Expected output:
+# 1050263976
+
+# Flash the firmware
+nrfjprog --program blinky.hex --chiperase --verify --reset
 ```
 
 **Expected Output:**
 ```
 Parsing hex file.
 Erasing user available code and UICR flash areas.
+Applying system reset.
+Checking that the area to write is not protected.
 Programming device.
 Verifying programming.
 Verified OK.
@@ -561,7 +970,160 @@ Applying system reset.
 Run.
 ```
 
-**🎉 LED1 on your nRF52840 DK should start blinking!**
+**🎉 SUCCESS:** LED1 on your nRF52840 DK blinks at 1-second intervals!
+
+---
+
+### 7.7 Troubleshooting Reference
+
+#### **Issue: "connect_to localhost port 3240: failed" in Tunnel**
+
+**Cause:** Tunnel is pointing to wrong IP address.
+
+**Solution:**
+```bash
+# Use Windows host IP, NOT localhost
+gh codespace ssh --codespace <NAME> -- -R 3240:172.28.112.1:3240
+#                                              ^^^^^^^^^^^^^^
+#                                              Use YOUR Windows IP
+```
+
+**How to find your Windows IP:**
+```powershell
+# In PowerShell
+usbipd attach --wsl --busid 3-1
+# Look for: "Using IP address 172.28.112.1 to reach the host."
+usbipd detach --busid 3-1
+```
+
+---
+
+#### **Issue: "Unknown Op Common Status" Error**
+
+**Cause:** Protocol version mismatch (old issue, now resolved).
+
+**Solution:** Use the Windows host IP in the tunnel (see above).
+
+---
+
+#### **Issue: "gh: command not found" in WSL**
+
+**Cause:** GitHub CLI not installed.
+
+**Solution:**
+```bash
+sudo apt update
+sudo apt install gh
+gh auth login
+gh auth refresh -h github.com -s codespace
+```
+
+---
+
+#### **Issue: "Must have admin rights to Repository" Error**
+
+**Cause:** Missing `codespace` OAuth scope.
+
+**Solution:**
+```bash
+gh auth refresh -h github.com -s codespace
+# Follow browser authentication to grant the scope
+```
+
+---
+
+#### **Issue: WSL Interoperability Disabled**
+
+**Cause:** `/etc/wsl.conf` not configured.
+
+**Solution:**
+```bash
+sudo nano /etc/wsl.conf
+
+# Add:
+[interop]
+enabled=true
+appendWindowsPath=true
+
+# Save, then in PowerShell:
+wsl --shutdown
+# Re-open WSL
+```
+
+---
+
+#### **Issue: "nrfjprog: command not found" in Windows**
+
+**Cause:** nRF Command Line Tools not installed or not in PATH.
+
+**Solution:**
+1. Download from [Nordic website](https://www.nordicsemi.com/Products/Development-tools/nrf-command-line-tools/download)
+2. Install with default settings
+3. **Restart PowerShell** (to reload PATH)
+4. Verify: `nrfjprog --version`
+
+---
+
+### 7.8 Summary: What We Learned
+
+**✅ What Works:**
+- Windows usbipd service (USB/IP server)
+- WSL as a bridge with GitHub CLI
+- SSH reverse tunneling to Codespace
+- USB/IP protocol handshake and device discovery
+- Building firmware in the cloud
+- Flashing firmware locally
+
+**❌ What Doesn't Work:**
+- Direct USB device attachment in browser-based Codespaces
+- Loading `vhci-hcd` kernel module in Azure VMs
+- Hardware debugging from the cloud (requires local setup)
+
+**🎓 Key Takeaway:**
+The **Hybrid Workflow** (build in cloud, flash locally) is the **industry-standard approach** for cloud-based embedded development. Companies like Tesla, SpaceX, and Nordic Semiconductor use this exact architecture for:
+- **Consistent build environments** (Docker containers)
+- **Powerful cloud compute** (faster builds)
+- **Reliable hardware access** (local USB, no network latency)
+- **Team collaboration** (shared Codespaces)
+
+---
+
+### 7.9 Alternative: VS Code Desktop (Future Exploration)
+
+**VS Code Desktop** with the **Remote - Tunnels** extension may provide better USB forwarding support than browser-based Codespaces. This is worth exploring if you need more integrated hardware access.
+
+**Setup:**
+1. Install VS Code Desktop on Windows
+2. Install "GitHub Codespaces" extension
+3. Connect to Codespace via `Ctrl+Shift+P` → "Codespaces: Connect to Codespace"
+4. Use integrated terminal for both cloud and local commands
+
+**Potential Benefits:**
+- Better terminal integration
+- Possible USB forwarding (unconfirmed)
+- Faster file downloads
+- Native debugging support
+
+**This approach was not fully tested in our session.**
+
+---
+
+## Next Steps
+
+Now that you understand the hardware connection architecture and limitations, proceed to:
+
+- **Section 8:** Essential Commands Reference
+- **Section 9:** Testing Without Hardware (Mock Hardware Simulation)
+- **Section 10:** Building Your First Bare-Metal Application
+
+**You're ready to start developing!** 🚀
+
+---
+
+**Last Updated:** January 27, 2026  
+**Tested Environment:** GitHub Codespaces (Azure kernel 6.8.0-1030-azure)  
+**Hardware:** nRF52840 Development Kit  
+**OS:** Windows 11 with WSL2 (Ubuntu 22.04)
 
 ---
 
