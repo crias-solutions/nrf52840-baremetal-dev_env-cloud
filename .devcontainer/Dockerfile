@@ -13,8 +13,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     unzip \
-    # USB/IP tools (CRITICAL for hardware connection)
-    linux-tools-generic \
+    # USB/IP tools (for hardware connection attempts)
+    linux-tools-azure \
+    linux-cloud-tools-azure \
     hwdata \
     usbutils \
     kmod \
@@ -25,6 +26,9 @@ RUN apt-get update && apt-get install -y \
     # Utilities
     nano \
     vim \
+    # Node.js dependencies (for Claude Code CLI)
+    ca-certificates \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # ========== ARM GCC TOOLCHAIN ==========
@@ -36,7 +40,7 @@ RUN wget -q https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binr
 # Add ARM GCC to PATH
 ENV PATH="/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin:${PATH}"
 
-# ========== nRF5 SDK v17.1.0 ==========
+# ========== nRF5 SDK v17.1.0 (FLATTENED) ==========
 RUN mkdir -p /opt/nrf5_sdk
 WORKDIR /opt/nrf5_sdk
 
@@ -49,7 +53,7 @@ RUN wget -q https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-
 # Set SDK environment variable
 ENV NRF5_SDK_PATH=/opt/nrf5_sdk
 
-# Configure SDK to use our ARM GCC toolchain (now the path exists!)
+# Configure SDK to use our ARM GCC toolchain
 RUN echo "GNU_INSTALL_ROOT := /opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/" > /opt/nrf5_sdk/components/toolchain/gcc/Makefile.posix \
     && echo "GNU_VERSION := 12.2.1" >> /opt/nrf5_sdk/components/toolchain/gcc/Makefile.posix \
     && echo "GNU_PREFIX := arm-none-eabi" >> /opt/nrf5_sdk/components/toolchain/gcc/Makefile.posix
@@ -72,12 +76,6 @@ RUN mkdir -p /opt/SEGGER \
 ENV PATH="/opt/SEGGER/JLink:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/SEGGER/JLink:${LD_LIBRARY_PATH}"
 
-# ========== PYTHON DEPENDENCIES ==========
-RUN pip3 install --no-cache-dir \
-    pyserial \
-    click \
-    colorama
-
 # ========== NODE.JS (Required for Claude Code CLI) ==========
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
@@ -92,6 +90,12 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # Create Claude configuration directory and set correct ownership
 RUN mkdir -p /home/vscode/.claude/commands && chown -R vscode:vscode /home/vscode/.claude
+
+# ========== PYTHON DEPENDENCIES ==========
+RUN pip3 install --no-cache-dir \
+    pyserial \
+    click \
+    colorama
 
 # ========== WORKSPACE SETUP ==========
 WORKDIR /workspaces/project
