@@ -27,7 +27,8 @@
                     "/opt/nrf5_sdk/modules/**"
                 ],
                 "C_Cpp.default.defines": [
-                    "NRF52840_XXAA"
+                    "NRF52840_XXAA",
+                    "BOARD_PCA10056"
                 ],
                 "files.associations": {
                     "*.md": "markdown"
@@ -44,11 +45,11 @@
 
     "remoteUser": "vscode",
     
-    "postCreateCommand": "bash -c 'mkdir -p docs/FSD projects && chmod +x scripts/*.sh scripts/*.py && bash scripts/setup_git.sh && arm-none-eabi-gcc --version && nrfjprog --version && claude --version && echo && echo \"✅ Environment ready! Type \\\"claude\\\" to start.\"'",
+    "postCreateCommand": "bash -c 'mkdir -p docs/FSD projects /home/vscode/.claude && echo \"{\\\"apiKey\\\": \\\"${ANTHROPIC_API_KEY}\\\"}\" > /home/vscode/.claude/config.json && chown -R vscode:vscode /home/vscode/.claude && chmod +x scripts/*.sh scripts/*.py 2>/dev/null || true && bash scripts/setup_git.sh 2>/dev/null || true && echo && echo \"=== Environment Verification ===\" && arm-none-eabi-gcc --version && echo && nrfjprog --version && echo && claude --version 2>/dev/null || echo \"Claude Code: Run npm install -g @anthropic-ai/claude-code\" && echo && echo \"✅ Environment ready! Type \\\"claude\\\" to start.\"'",
     
     "features": {
-    "ghcr.io/devcontainers/features/sshd:1": {
-        "version": "latest"
+        "ghcr.io/devcontainers/features/sshd:1": {
+            "version": "latest"
         },
         "ghcr.io/devcontainers/features/git:1": {}
     },
